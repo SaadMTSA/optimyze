@@ -13,24 +13,28 @@ class LatinHypercubesCV:
     def __init__(
         self,
         estimator,
-        param_grid,
-        n_iters=10,
+        param_distributions,
+        n_iter=10,
         scoring=None,
         n_jobs=None,
         cv=None,
         refit=False,
     ):
         self.estimator = estimator
-        self.param_grid = param_grid
-        self.n_iters = n_iters
+        self.param_distributions = param_distributions
+        self.n_iter = n_iter
         self.scoring = scoring
         self.n_jobs = n_jobs
         self.cv = cv
         self.refit = refit
+        self.best_score_ = 0
+        self.best_index_ = 0
+        self.best_estimator_ = None
+        self.best_params_ = None
 
     def _calculate_intervals(self):
         adjusted_hp_set = []
-        for k, v in self.param_grid.items():
+        for k, v in self.param_distributions.items():
             adjusted_hp_set.append([])
             if isinstance(v, list):
                 for i in self.hp_set[0] * len(v):
@@ -56,23 +60,46 @@ class LatinHypercubesCV:
 
         self.hp_set = adjusted_hp_set
 
-    def fit(self, X, y, groups=None, **kwargs):
+    def _create_cv_results(self):
+        cv_results = {}
+        for i in self.scores:
+            for j in i.keys():
+                mean_str = f"mean_{j}"
+                std_str = f"std_{j}"
+                mean = np.mean(i[j])
+                std = np.std(i[j])
+                if mean_str in cv_results:
+                    cv_results[mean_str].append(mean)
+                else:
+                    cv_results[mean_str] = [mean]
+                
+                if std_str in cv_results:
+                    cv_results[std_str].append(std)
+                else:
+                    cv_results[std_str] = [std]
 
-        self.hp_set = lhs(len(self.param_grid), self.n_iters).T
+        for i in cv_results.keys():
+            cv_results[i] = np.array(cv_results[i])
+
+        self.cv_results_.update(cv_results)
+        
+    def fit(self, X, y, groups=None, **fit_params):
+    
+        self.cv_results_ = {"params": []}
+        
+        self.hp_set = lhs(len(self.param_distributions), self.n_iter).T
         self._calculate_intervals()
-        self.scores = []
+        scores = []
 
-        self.best_score_ = 0
-        self.best_index_ = 0
-        self.best_estimator_ = None
-        self.best_params_ = None
-
-        for i in range(self.n_iters):
+        for i in range(self.n_iter):
             current_params = {}
-            for j_idx, j in enumerate(self.param_grid.keys()):
+            for j_idx, j in enumerate(self.param_distributions.keys()):
                 current_params[j] = self.hp_set[j_idx][i]
+            
             self.estimator.set_params(**current_params)
-            self.scores.append(
+            self.cv_results_["params"].append(current_params)
+            
+            scores.append(
                 cross_validate(
                     self.estimator,
                     X=X,
@@ -81,9 +108,10 @@ class LatinHypercubesCV:
                     scoring=self.scoring,
                     cv=self.cv,
                     n_jobs=self.n_jobs,
-                    **kwargs,
+                    fit_params=fit_params,
                 )
             )
+            self.scores = scores
             current_score = np.mean(self.scores[-1]["test_score"])
             if self.best_score_ < current_score:
                 self.best_score_ = current_score
@@ -91,7 +119,10 @@ class LatinHypercubesCV:
                 self.best_index = np.size(self.scores) - 1
                 self.best_estimator_ = clone(self.estimator)
 
-        self.best_estimator_.fit(X, y, groups, **kwargs)
+        self._create_cv_results()
+
+        self.best_estimator_.fit(X, y, **fit_params)
+
         return self
 
     def predict(self, X):
