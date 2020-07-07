@@ -89,9 +89,6 @@ class LatinHypercubesCV:
             cv_results[i] = np.array(cv_results[i])
 
         self.cv_results_.update(cv_results)
-        print(self.scores)
-        print(self.cv_results_)
-        print(self.hp_set)
 
     def fit(self, X, y, groups=None, **fit_params):
 
