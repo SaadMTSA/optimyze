@@ -41,7 +41,7 @@ class LatinHypercubesCV:
                     adjusted_hp_set[-1].append(v[int(i)])
             elif isinstance(v, tuple) and len(v) == 3:
                 if v[0] == "uniform":
-                    adjusted_hp_set[-1] = [i for i in self.hp_set[0] * (v[2] - v[1])]
+                    adjusted_hp_set[-1] = [i for i in (self.hp_set[0] * (v[2] - v[1]) + v[1])]
                 elif v[0] == "log_uniform":
                     possibilities = np.logspace(
                         np.log2(v[1]), np.log2(v[2]), self.n_iter + 1, base=2
@@ -55,7 +55,7 @@ class LatinHypercubesCV:
                         )
                 elif v[0] == "int_uniform":
                     adjusted_hp_set[-1] = [
-                        int(i) if i >= v[1] else v[1] for i in self.hp_set[0] * (v[2] - v[1])
+                        int(i) for i in (self.hp_set[0] * (v[2] - v[1]) + v[1])
                     ]
 
             else:
